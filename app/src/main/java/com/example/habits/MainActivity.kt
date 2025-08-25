@@ -1,47 +1,37 @@
 package com.example.habits
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.habits.ui.theme.HabitTrackerTheme
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.habits.ui.HabitEditScreen
+import com.example.habits.ui.HabitListScreen
+import com.example.habits.ui.theme.HabitTheme
 
 class MainActivity : ComponentActivity() {
+    private val askNotif = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= 33) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+
         setContent {
-            HabitTrackerTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+            HabitTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    val nav = rememberNavController()
+                    NavHost(navController = nav, startDestination = "list") {
+                        composable("list") { HabitListScreen(onAdd = { nav.navigate("edit") }) }
+                        composable("edit") { HabitEditScreen(onDone = { nav.popBackStack() }) }
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    HabitTrackerTheme {
-        Greeting("Android")
     }
 }
