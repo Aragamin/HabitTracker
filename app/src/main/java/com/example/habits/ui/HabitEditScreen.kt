@@ -75,7 +75,7 @@ fun HabitEditScreen(onDone: () -> Unit) {
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Цель/день", style = MaterialTheme.typography.labelLarge)
-                Stepper(value = target, onChange = { target = it })
+                Stepper(value = target, onChange = { target = it }, min = 0)
             }
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

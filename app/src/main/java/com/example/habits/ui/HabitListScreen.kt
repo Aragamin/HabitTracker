@@ -10,8 +10,8 @@ import androidx.compose.ui.unit.dp
 import com.example.habits.Graph
 import com.example.habits.data.DayMark
 import com.example.habits.ui.components.PartialValueDialog
-import com.example.habits.ui.components.StateMark
 import com.example.habits.ui.components.SimpleTopBar
+import com.example.habits.ui.components.StateMark
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 
@@ -26,7 +26,6 @@ fun HabitListScreen(
 
     val items by repo.observeHabitsWithToday(zone).collectAsState(initial = emptyList())
 
-    // один диалог на экран
     var dialogHabitId by remember { mutableStateOf<Long?>(null) }
     var dialogTarget by remember { mutableStateOf(0) }
 
@@ -41,17 +40,16 @@ fun HabitListScreen(
         ) {
             items(items, key = { it.habit.id }) { hw ->
                 val mark by repo.observeTodayMark(hw.habit.id, zone).collectAsState(initial = DayMark.UNSET)
-                val allowPartial = hw.habit.targetPerDay > 0
 
+                val target = hw.habit.targetPerDay
+                val showNumbers = target >= 2
                 val progressText =
-                    if (!allowPartial) {
-                        "Сегодня: " + when (mark) {
-                            DayMark.DONE -> "✓"
-                            DayMark.MISSED -> "✕"
-                            DayMark.UNSET, DayMark.PARTIAL -> "—"
-                        }
-                    } else {
-                        "Сегодня: ${hw.todayCount} / ${hw.habit.targetPerDay}"
+                    if (showNumbers) "Сегодня: ${hw.todayCount} / $target"
+                    else "Сегодня: " + when (mark) {
+                        DayMark.DONE -> "✓"
+                        DayMark.MISSED -> "✕"
+                        DayMark.PARTIAL -> "~"
+                        DayMark.UNSET -> "—"
                     }
 
                 Card {
@@ -63,13 +61,19 @@ fun HabitListScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(progressText)
+                            // 4 состояния всегда доступны, даже при target 0/1
                             StateMark(
                                 value = mark,
-                                allowPartial = allowPartial
+                                allowPartial = true
                             ) { next ->
-                                if (next == DayMark.PARTIAL && allowPartial) {
-                                    dialogHabitId = hw.habit.id
-                                    dialogTarget = hw.habit.targetPerDay
+                                if (next == DayMark.PARTIAL) {
+                                    if (target >= 2) {
+                                        dialogHabitId = hw.habit.id
+                                        dialogTarget = target
+                                    } else {
+                                        // для 0/1 — PARTIAL без числа
+                                        scope.launch { repo.setTodayPartial(hw.habit.id, zone, 0.0) }
+                                    }
                                 } else {
                                     scope.launch { repo.setTodayMark(hw.habit.id, zone, next) }
                                 }
@@ -82,16 +86,20 @@ fun HabitListScreen(
         }
     }
 
-    // диалог PARTIAL
+    // Диалог PARTIAL только если target >= 2
     if (dialogHabitId != null) {
+        val id = dialogHabitId!!
+        val target = dialogTarget
         PartialValueDialog(
-            target = dialogTarget,
+            target = target,
             onConfirm = { value ->
-                val id = dialogHabitId!!
                 dialogHabitId = null
-                val clamped = value.coerceIn(0.0, dialogTarget.toDouble())
-                scope.launch {
-                    Graph.repo.setTodayPartial(id, zone, clamped)
+                val v = value.coerceIn(0.0, target.toDouble())
+                // если частичное == цели → DONE
+                if (v >= target.toDouble()) {
+                    scope.launch { Graph.repo.setTodayMark(id, zone, DayMark.DONE) }
+                } else {
+                    scope.launch { Graph.repo.setTodayPartial(id, zone, v) }
                 }
             },
             onDismiss = { dialogHabitId = null }
