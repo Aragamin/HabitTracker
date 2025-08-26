@@ -8,9 +8,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.habits.ui.HabitEditScreen
 import com.example.habits.ui.HabitListScreen
 import com.example.habits.ui.SettingsScreen
@@ -18,9 +20,8 @@ import com.example.habits.ui.theme.HabitTheme
 
 class MainActivity : ComponentActivity() {
 
-    // Запрос runtime-разрешения на уведомления для Android 13+
     private val askNotifications =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* ignore result */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,11 +38,19 @@ class MainActivity : ComponentActivity() {
                         composable("list") {
                             HabitListScreen(
                                 onAdd = { nav.navigate("edit") },
-                                onSettings = { nav.navigate("settings") }
+                                onSettings = { nav.navigate("settings") },
+                                onSettingsHabit = { id -> nav.navigate("edit/$id") }
                             )
                         }
                         composable("edit") {
                             HabitEditScreen(onDone = { nav.popBackStack() })
+                        }
+                        composable(
+                            route = "edit/{id}",
+                            arguments = listOf(navArgument("id") { type = NavType.LongType })
+                        ) { backStackEntry ->
+                            val id = backStackEntry.arguments?.getLong("id")
+                            HabitEditScreen(onDone = { nav.popBackStack() }, habitId = id)
                         }
                         composable("settings") {
                             SettingsScreen(onBack = { nav.popBackStack() })

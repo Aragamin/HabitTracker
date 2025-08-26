@@ -66,7 +66,7 @@ class HabitRepository(
         return from to to
     }
 
-    suspend fun allReminders() = reminders.all()
+    suspend fun allReminders(): List<ReminderEntity> = reminders.all()
 
     /* ----- Графика ----- */
 
@@ -99,4 +99,26 @@ class HabitRepository(
         checkins.deleteBetween(habitId, from, to)
         checkins.insert(CheckinEntity(habitId=habitId, status=3, value=value, isDone=false))
     }
+
+    /* ----- удаление и обновление ----- */
+
+    suspend fun updateHabitBasic(habitId: Long, name: String, targetPerDay: Int) {
+        val hw = habits.getWithReminders(habitId) ?: return
+        habits.update(hw.habit.copy(name = name, targetPerDay = targetPerDay))
+    }
+
+    suspend fun updateReminder(remId: Long, hour: Int, minute: Int, daysMask: Int): ReminderEntity? {
+        val cur = reminders.byId(remId) ?: return null
+        if (cur.hour == hour && cur.minute == minute && cur.daysMask == daysMask) return cur
+        reminders.updateFields(remId, hour, minute, daysMask)
+        return cur.copy(hour = hour, minute = minute, daysMask = daysMask)
+    }
+
+
+    suspend fun deleteHabit(habitId: Long) {
+        val hw = habits.getWithReminders(habitId) ?: return
+        habits.delete(hw.habit) // каскад удалит reminders и checkins
+    }
+
+
 }

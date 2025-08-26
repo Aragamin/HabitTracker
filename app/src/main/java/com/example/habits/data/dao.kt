@@ -66,13 +66,21 @@ interface RemindersDao {
     @Query("SELECT * FROM reminders WHERE habitId = :habitId ORDER BY id ASC")
     suspend fun byHabit(habitId: Long): List<ReminderEntity>
 
-    @Insert suspend fun insert(r: ReminderEntity): Long
-    @Update suspend fun update(r: ReminderEntity)
-    @Delete suspend fun delete(r: ReminderEntity)
+    @Query("SELECT * FROM reminders WHERE id = :id LIMIT 1")
+    suspend fun byId(id: Long): ReminderEntity?
 
     @Query("SELECT * FROM reminders")
     suspend fun all(): List<ReminderEntity>
+
+    @Insert suspend fun insert(r: ReminderEntity): Long
+    @Update suspend fun update(r: ReminderEntity)
+
+    @Query("UPDATE reminders SET hour = :hour, minute = :minute, daysMask = :daysMask WHERE id = :id")
+    suspend fun updateFields(id: Long, hour: Int, minute: Int, daysMask: Int): Int
+
+    @Delete suspend fun delete(r: ReminderEntity)
 }
+
 
 @Dao
 interface CheckinsDao {

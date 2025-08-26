@@ -18,7 +18,8 @@ import java.time.ZoneId
 @Composable
 fun HabitListScreen(
     onAdd: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onSettingsHabit: (Long) -> Unit
 ) {
     val repo = Graph.repo
     val scope = rememberCoroutineScope()
@@ -61,21 +62,20 @@ fun HabitListScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(progressText)
-                            // 4 состояния всегда доступны, даже при target 0/1
-                            StateMark(
-                                value = mark,
-                                allowPartial = true
-                            ) { next ->
-                                if (next == DayMark.PARTIAL) {
-                                    if (target >= 2) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // кнопка «настройки»
+                                TextButton(onClick = {onSettingsHabit(hw.habit.id) }) { Text("⚙") }
+                                // переключатель состояния
+                                StateMark(
+                                    value = mark,
+                                    allowPartial = true
+                                ) { next ->
+                                    if (next == DayMark.PARTIAL && target >= 2) {
                                         dialogHabitId = hw.habit.id
                                         dialogTarget = target
                                     } else {
-                                        // для 0/1 — PARTIAL без числа
-                                        scope.launch { repo.setTodayPartial(hw.habit.id, zone, 0.0) }
+                                        scope.launch { repo.setTodayMark(hw.habit.id, zone, next) }
                                     }
-                                } else {
-                                    scope.launch { repo.setTodayMark(hw.habit.id, zone, next) }
                                 }
                             }
                         }
