@@ -16,18 +16,18 @@ import androidx.compose.ui.unit.dp
 import com.example.habits.data.DayMark
 
 @Composable
-fun TriStateMark(value: DayMark, onChange: (DayMark) -> Unit) {
-    val next = when (value) {
-        DayMark.UNSET -> DayMark.DONE
-        DayMark.DONE  -> DayMark.MISSED
-        DayMark.MISSED-> DayMark.UNSET
-    }
+fun StateMark(
+    value: DayMark,
+    allowPartial: Boolean,
+    onChange: (DayMark) -> Unit
+) {
+    val next = nextState(value, allowPartial)
     val (symbol, tint, fillAlpha) = when (value) {
-        DayMark.UNSET -> Triple("✕", MaterialTheme.colorScheme.outline, 0f)
-        DayMark.DONE  -> Triple("✓", Color(0xFF2E7D32), 0.15f) // тёмно-зелёный
-        DayMark.MISSED-> Triple("✕", Color(0xFFD32F2F), 0.15f) // красный
+        DayMark.UNSET   -> Triple("✕", MaterialTheme.colorScheme.outline, 0f)            // серый
+        DayMark.DONE    -> Triple("✓", Color(0xFF2E7D32), 0.15f)                 // зелёный
+        DayMark.MISSED  -> Triple("✕", Color(0xFFD32F2F), 0.15f)                 // красный
+        DayMark.PARTIAL -> Triple("~", Color(0xFFF9A825), 0.15f)                 // жёлтый
     }
-
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -39,3 +39,19 @@ fun TriStateMark(value: DayMark, onChange: (DayMark) -> Unit) {
         Text(symbol, color = tint, style = MaterialTheme.typography.titleMedium)
     }
 }
+
+private fun nextState(cur: DayMark, allowPartial: Boolean): DayMark =
+    if (!allowPartial) {
+        when (cur) {
+            DayMark.UNSET -> DayMark.DONE
+            DayMark.DONE  -> DayMark.MISSED
+            else          -> DayMark.UNSET
+        }
+    } else {
+        when (cur) {
+            DayMark.UNSET -> DayMark.DONE
+            DayMark.DONE  -> DayMark.MISSED
+            DayMark.MISSED-> DayMark.PARTIAL
+            DayMark.PARTIAL-> DayMark.UNSET
+        }
+    }

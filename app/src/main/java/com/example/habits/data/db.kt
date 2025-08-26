@@ -18,7 +18,7 @@ class Converters {
 
 @Database(
     entities = [HabitEntity::class, ReminderEntity::class, CheckinEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -37,9 +37,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // 2 -> 3: добавляем value и status, маппим старый isDone
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE checkins ADD COLUMN value REAL")
+                db.execSQL("ALTER TABLE checkins ADD COLUMN status INTEGER NOT NULL DEFAULT 0")
+                // 1=DONE, 2=MISSED, 3=PARTIAL; 0=legacy/UNSET (не используется в таблице)
+                db.execSQL("UPDATE checkins SET status = CASE WHEN isDone=1 THEN 1 ELSE 2 END")
+            }
+        }
+
         fun build(ctx: Context): AppDatabase =
             Room.databaseBuilder(ctx, AppDatabase::class.java, "habits.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

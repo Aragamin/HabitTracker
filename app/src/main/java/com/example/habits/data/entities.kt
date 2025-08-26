@@ -47,7 +47,9 @@ data class CheckinEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val habitId: Long,
     val ts: Instant = Instant.now(),
-    val isDone: Boolean = true
+    val isDone: Boolean = true,      // legacy, не используем в логике подсчёта
+    val value: Double? = null,       // прогресс (для PARTIAL), единицы = "в день"
+    val status: Int = 1              // 1=DONE, 2=MISSED, 3=PARTIAL
 )
 
 /** Habit + reminders для планировщика и деталей. */

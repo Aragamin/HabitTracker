@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.*
 
-enum class DayMark { UNSET, DONE, MISSED }
+enum class DayMark { UNSET, DONE, MISSED, PARTIAL }
 
 class HabitRepository(
     private val habits: HabitsDao,
@@ -71,23 +71,32 @@ class HabitRepository(
     /* ----- Графика ----- */
 
     fun observeTodayMark(habitId: Long, zone: ZoneId): Flow<DayMark> {
-        val (from, to) = todayBounds(zone)
-        return checkins.todayMarkFlow(habitId, from, to).map { row ->
+        val (from,to)=todayBounds(zone)
+        return checkins.todayRowFlow(habitId, from, to).map { row ->
             when {
                 row == null -> DayMark.UNSET
-                row.isDone  -> DayMark.DONE
-                else        -> DayMark.MISSED
+                row.status == 1 -> DayMark.DONE
+                row.status == 2 -> DayMark.MISSED
+                row.status == 3 -> DayMark.PARTIAL
+                else -> DayMark.UNSET
             }
         }
     }
 
     suspend fun setTodayMark(habitId: Long, zone: ZoneId, mark: DayMark) {
-        val (from, to) = todayBounds(zone)
+        val (from,to)=todayBounds(zone)
         checkins.deleteBetween(habitId, from, to)
         when (mark) {
             DayMark.UNSET -> Unit
-            DayMark.DONE  -> checkins.insert(CheckinEntity(habitId = habitId, isDone = true))
-            DayMark.MISSED-> checkins.insert(CheckinEntity(habitId = habitId, isDone = false))
+            DayMark.DONE  -> checkins.insert(CheckinEntity(habitId=habitId, status=1, isDone=true))
+            DayMark.MISSED-> checkins.insert(CheckinEntity(habitId=habitId, status=2, isDone=false))
+            DayMark.PARTIAL-> error("Use setTodayPartial(...)")
         }
+    }
+
+    suspend fun setTodayPartial(habitId: Long, zone: ZoneId, value: Double) {
+        val (from,to)=todayBounds(zone)
+        checkins.deleteBetween(habitId, from, to)
+        checkins.insert(CheckinEntity(habitId=habitId, status=3, value=value, isDone=false))
     }
 }
