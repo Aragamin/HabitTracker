@@ -16,22 +16,26 @@ import java.time.Instant
 
 @Dao
 interface HabitsDao {
-//    @Query("SELECT * FROM habits WHERE active = 1 ORDER BY id DESC")
-//    fun observeAll(): Flow<List<HabitEntity>>
+    @Query("SELECT * FROM habits WHERE active = 1 ORDER BY id DESC")
+    fun observeAll(): Flow<List<HabitEntity>>
 
     @Transaction
     @Query("""
     SELECT h.*,
-    COALESCE((
-      SELECT SUM(CASE WHEN c.isDone = 1 THEN 1 ELSE 0 END)
-      FROM checkins c
-      WHERE c.habitId = h.id AND c.ts >= :from AND c.ts < :to
-    ), 0) AS todayCount
+    -- если сегодня есть запись isDone=1, то считаем весь объём цели (targetPerDay), иначе 0
+    CASE WHEN EXISTS (
+        SELECT 1 FROM checkins c
+        WHERE c.habitId = h.id
+          AND c.ts >= :from AND c.ts < :to
+          AND c.isDone = 1
+    )
+    THEN h.targetPerDay ELSE 0 END AS todayCount
     FROM habits h
     WHERE h.active = 1
     ORDER BY h.id DESC
-    """)
+""")
     fun observeWithToday(from: Instant, to: Instant): Flow<List<HabitWithToday>>
+
 
     @Transaction
     @Query("SELECT * FROM habits WHERE id = :id")

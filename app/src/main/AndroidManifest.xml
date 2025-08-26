@@ -24,14 +24,13 @@
             android:name=".reminders.AlarmReceiver"
             android:exported="false" />
 
-        <!-- Rescheduling после перезагрузки и (опционально) после обновления пакета -->
+        <!-- Rescheduling-->
         <receiver
             android:name=".reminders.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <!-- опционально: раскомментировать для Rescheduling после обновления -->
-                <!-- <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/> -->
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
 
