@@ -3,7 +3,9 @@ package com.example.habits.data
 import androidx.room.*
 import java.time.Instant
 
-@Entity(tableName = "habits")
+@Entity(
+    tableName = "habits"
+)
 data class HabitEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
@@ -27,7 +29,8 @@ data class ReminderEntity(
     val habitId: Long,
     val hour: Int,
     val minute: Int,
-    val daysMask: Int, // биты Пн..Вс: 1<<0 ... 1<<6
+    /** Биты Пн..Вс: 1<<0..1<<6 */
+    val daysMask: Int
 )
 
 @Entity(
@@ -43,9 +46,11 @@ data class ReminderEntity(
 data class CheckinEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val habitId: Long,
-    val ts: Instant = Instant.now()
+    val ts: Instant = Instant.now(),
+    val isDone: Boolean = true
 )
 
+/** Habit + reminders для планировщика и деталей. */
 data class HabitWithReminder(
     @Embedded val habit: HabitEntity,
     @Relation(parentColumn = "id", entityColumn = "habitId")

@@ -13,22 +13,39 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.habits.ui.HabitEditScreen
 import com.example.habits.ui.HabitListScreen
+import com.example.habits.ui.SettingsScreen
 import com.example.habits.ui.theme.HabitTheme
 
 class MainActivity : ComponentActivity() {
-    private val askNotif = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    // Запрос runtime-разрешения на уведомления для Android 13+
+    private val askNotifications =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* ignore result */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= 33) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         setContent {
             HabitTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = "list") {
-                        composable("list") { HabitListScreen(onAdd = { nav.navigate("edit") }) }
-                        composable("edit") { HabitEditScreen(onDone = { nav.popBackStack() }) }
+                        composable("list") {
+                            HabitListScreen(
+                                onAdd = { nav.navigate("edit") },
+                                onSettings = { nav.navigate("settings") }
+                            )
+                        }
+                        composable("edit") {
+                            HabitEditScreen(onDone = { nav.popBackStack() })
+                        }
+                        composable("settings") {
+                            SettingsScreen(onBack = { nav.popBackStack() })
+                        }
                     }
                 }
             }
