@@ -1,10 +1,9 @@
 package com.example.habits.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -13,35 +12,40 @@ import java.time.DayOfWeek
 
 @Composable
 fun DaysSelector(days: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
-    val order = listOf(
-        DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
-        DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY
+    val week = listOf(
+        DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+        DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
     )
-    val firstRow = order.take(4)
-    val secondRow = order.drop(4)
+    val weekend = listOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
 
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        firstRow.forEach { d ->
-            FilterChip(selected = days.contains(d), onClick = { onToggle(d) }, label = { Text(short(d)) })
+        week.forEach { d ->
+            DayChip(d = d, selected = days.contains(d)) { onToggle(d) }
         }
     }
     Spacer(Modifier.height(6.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        secondRow.forEach { d ->
-            FilterChip(selected = days.contains(d), onClick = { onToggle(d) }, label = { Text(short(d)) })
+        weekend.forEach { d ->
+            DayChip(d = d, selected = days.contains(d)) { onToggle(d) }
         }
     }
 }
 
-fun daysMask(set: Set<DayOfWeek>): Int {
-    var mask = 0
-    set.forEach { d -> mask = mask or (1 shl ((d.value + 6) % 7)) } // Mon->0 .. Sun->6
-    return mask
+@Composable
+private fun DayChip(d: DayOfWeek, selected: Boolean, onClick: () -> Unit) {
+    val colors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = MaterialTheme.colorScheme.primary,      // тёмно-«синий» из темы
+        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(short(d)) },
+        colors = colors
+    )
 }
-
-fun defaultWeekdays() = setOf(
-    DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
-)
 
 private fun short(d: DayOfWeek) = when (d) {
     DayOfWeek.MONDAY -> "Пн"

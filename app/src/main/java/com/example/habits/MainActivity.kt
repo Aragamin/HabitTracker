@@ -13,10 +13,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.core.content.ContextCompat
+import android.widget.Toast
+import android.content.pm.PackageManager
+import com.example.habits.reminders.ExactAlarms
 import com.example.habits.ui.HabitEditScreen
 import com.example.habits.ui.HabitListScreen
 import com.example.habits.ui.SettingsScreen
 import com.example.habits.ui.theme.HabitTheme
+
 
 class MainActivity : ComponentActivity() {
 
@@ -26,8 +31,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // POST_NOTIFICATIONS только на 33+, и только если ещё не выдано
         if (Build.VERSION.SDK_INT >= 33) {
-            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            val granted = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        // Для напоминаний нужны точные будильники на 31+
+        if (Build.VERSION.SDK_INT >= 31 && !ExactAlarms.hasPermission(this)) {
+            Toast.makeText(this, "Разрешите точные будильники для напоминаний", Toast.LENGTH_LONG).show()
+            ExactAlarms.request(this) // откроет системный экран
         }
 
         setContent {

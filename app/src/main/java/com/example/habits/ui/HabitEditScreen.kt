@@ -16,9 +16,8 @@ import com.example.habits.Graph
 import com.example.habits.ui.components.SimpleTopBar
 import com.example.habits.ui.components.Stepper
 import com.example.habits.ui.components.DaysSelector
-import com.example.habits.ui.components.daysMask
-import com.example.habits.ui.components.defaultWeekdays
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.util.Locale
 
 @Composable
@@ -53,9 +52,9 @@ fun HabitEditScreen(onDone: () -> Unit, habitId: Long? = null) {
                     hour = r.hour
                     minute = r.minute
                     // восстановим days из маски
-                    val set = mutableSetOf<java.time.DayOfWeek>()
+                    val set = mutableSetOf<DayOfWeek>()
                     for (i in 0..6) if ((r.daysMask and (1 shl i)) != 0) {
-                        set += java.time.DayOfWeek.of(((i + 1) % 7).let { if (it == 0) 7 else it })
+                        set += DayOfWeek.of(((i + 1) % 7).let { if (it == 0) 7 else it })
                     }
                     days = set
                 }
@@ -75,8 +74,8 @@ fun HabitEditScreen(onDone: () -> Unit, habitId: Long? = null) {
         topBar = {
             SimpleTopBar(
                 title = if (isEdit) "Редактировать привычку" else "Новая привычка",
-                navText = "Назад",
-                onNavClick = onDone,
+                showBack = true,
+                onBack = onDone,
                 actions = {
                     if (isEdit) {
                         TextButton(onClick = { confirmDelete = true }) { Text("Удалить") }
@@ -104,7 +103,7 @@ fun HabitEditScreen(onDone: () -> Unit, habitId: Long? = null) {
                                         }
                                     }
                                 }
-                                // rechedule всех напоминаний этой привычки
+                                // re-schedule всех напоминаний этой привычки
                                 scheduler.scheduleForHabit(id)
                             }
                             snackbarHost.showSnackbar("Сохранено")
@@ -178,3 +177,17 @@ fun HabitEditScreen(onDone: () -> Unit, habitId: Long? = null) {
         )
     }
 }
+
+/* --- Локальные утилиты: mask и дефолтные будни --- */
+
+// map: Mon→0 … Sun→6
+private fun daysMask(set: Set<DayOfWeek>): Int {
+    var mask = 0
+    set.forEach { d -> mask = mask or (1 shl ((d.value + 6) % 7)) }
+    return mask
+}
+
+private fun defaultWeekdays(): Set<DayOfWeek> = setOf(
+    DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
+)
