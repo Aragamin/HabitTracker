@@ -44,12 +44,13 @@ fun HabitListScreen(
 
                 val target = hw.habit.targetPerDay
                 val showNumbers = target >= 2
+                val allowPartial = target >= 2  // PARTIAL разрешён только при цели ≥ 2
                 val progressText =
                     if (showNumbers) "Сегодня: ${hw.todayCount} / $target"
                     else "Сегодня: " + when (mark) {
                         DayMark.DONE -> "✓"
                         DayMark.MISSED -> "✕"
-                        DayMark.PARTIAL -> "~"
+                        DayMark.PARTIAL -> "~" // теоретически не появится при allowPartial=false, но оставим для совместимости
                         DayMark.UNSET -> "—"
                     }
 
@@ -64,17 +65,25 @@ fun HabitListScreen(
                             Text(progressText)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 // кнопка «настройки»
-                                TextButton(onClick = {onSettingsHabit(hw.habit.id) }) { Text("⚙") }
+                                TextButton(onClick = { onSettingsHabit(hw.habit.id) }) { Text("⚙") }
                                 // переключатель состояния
                                 StateMark(
                                     value = mark,
-                                    allowPartial = true
+                                    allowPartial = allowPartial
                                 ) { next ->
-                                    if (next == DayMark.PARTIAL && target >= 2) {
-                                        dialogHabitId = hw.habit.id
-                                        dialogTarget = target
-                                    } else {
-                                        scope.launch { repo.setTodayMark(hw.habit.id, zone, next) }
+                                    when {
+                                        // Диалог PARTIAL только если target >= 2
+                                        next == DayMark.PARTIAL && allowPartial -> {
+                                            dialogHabitId = hw.habit.id
+                                            dialogTarget = target
+                                        }
+                                        // Вместо PARTIAL при цели 0/1 — шаг к серому (UNSET), чтобы не падать
+                                        next == DayMark.PARTIAL && !allowPartial -> {
+                                            scope.launch { repo.setTodayMark(hw.habit.id, zone, DayMark.UNSET) }
+                                        }
+                                        else -> {
+                                            scope.launch { repo.setTodayMark(hw.habit.id, zone, next) }
+                                        }
                                     }
                                 }
                             }

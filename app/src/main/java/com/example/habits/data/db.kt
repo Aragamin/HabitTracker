@@ -1,12 +1,7 @@
-// app/src/main/java/com/example/habits/data/db.kt
 package com.example.habits.data
 
 import android.content.Context
-import androidx.room.Database
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.room.TypeConverter
-import androidx.room.TypeConverters
+import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import java.time.Instant
@@ -28,25 +23,18 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun checkinsDao(): CheckinsDao
 
     companion object {
-        // Миграция 1→2: добавляем isDone (0/1) в checkins, по умолчанию = 1 (сделано)
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE checkins ADD COLUMN isDone INTEGER NOT NULL DEFAULT 1"
-                )
+                db.execSQL("ALTER TABLE checkins ADD COLUMN isDone INTEGER NOT NULL DEFAULT 1")
             }
         }
-
-        // 2 -> 3: добавляем value и status, маппим старый isDone
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE checkins ADD COLUMN value REAL")
                 db.execSQL("ALTER TABLE checkins ADD COLUMN status INTEGER NOT NULL DEFAULT 0")
-                // 1=DONE, 2=MISSED, 3=PARTIAL; 0=legacy/UNSET (не используется в таблице)
                 db.execSQL("UPDATE checkins SET status = CASE WHEN isDone=1 THEN 1 ELSE 2 END")
             }
         }
-
         fun build(ctx: Context): AppDatabase =
             Room.databaseBuilder(ctx, AppDatabase::class.java, "habits.db")
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
