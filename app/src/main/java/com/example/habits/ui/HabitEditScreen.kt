@@ -1,20 +1,10 @@
-@file:OptIn(
-    androidx.compose.material3.ExperimentalMaterial3Api::class,
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
-)
-
-
 package com.example.habits.ui
 
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material3.*
-import androidx.compose.material3.TopAppBarDefaults.pinnedScrollBehavior
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -22,69 +12,109 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.example.habits.Graph
+import com.example.habits.ui.components.SimpleTopBar
+import com.example.habits.ui.components.Stepper
+import com.example.habits.ui.components.DaysSelector
+import com.example.habits.ui.components.daysMask
+import com.example.habits.ui.components.defaultWeekdays
 import kotlinx.coroutines.launch
-import java.time.DayOfWeek
 import java.util.Locale
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Arrangement
-
 
 @Composable
-fun HabitEditScreen(onDone: () -> Unit) {
+fun HabitEditScreen(onDone: () -> Unit, habitId: Long? = null) {
     val ctx = LocalContext.current
     val repo = Graph.repo
     val scheduler = Graph.scheduler
     val scope = rememberCoroutineScope()
 
-    // State
+    val isEdit = habitId != null
+
+    // Форма
     var name by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var target by rememberSaveable { mutableStateOf(1) }
     var hour by rememberSaveable { mutableStateOf(9) }
     var minute by rememberSaveable { mutableStateOf(0) }
     var days by rememberSaveable { mutableStateOf(defaultWeekdays()) }
 
-    val canSave = name.text.isNotBlank() && days.isNotEmpty()
+    // Загруженные сущности для редактирования
+    var reminderId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var loaded by remember { mutableStateOf(false) }
 
-    // AppBar scroll behavior
-    val scrollBehavior = pinnedScrollBehavior()
-
-    // Snackbar host
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    val showTimePicker = {
-        TimePickerDialog(ctx, { _, h, m -> hour = h; minute = m }, hour, minute, true).show()
+    LaunchedEffect(habitId) {
+        if (isEdit) {
+            val hw = repo.getHabitWithReminders(habitId!!)
+            if (hw != null) {
+                name = TextFieldValue(hw.habit.name)
+                target = hw.habit.targetPerDay
+                val r = hw.reminders.firstOrNull()
+                if (r != null) {
+                    reminderId = r.id
+                    hour = r.hour
+                    minute = r.minute
+                    // восстановим days из маски
+                    val set = mutableSetOf<java.time.DayOfWeek>()
+                    for (i in 0..6) if ((r.daysMask and (1 shl i)) != 0) {
+                        set += java.time.DayOfWeek.of(((i + 1) % 7).let { if (it == 0) 7 else it })
+                    }
+                    days = set
+                }
+            }
+        }
+        loaded = true
     }
 
+    val canSave = name.text.isNotBlank() && days.isNotEmpty()
+    val snackbarHost = remember { SnackbarHostState() }
+    val showTimePicker = { TimePickerDialog(ctx, { _, h, m -> hour = h; minute = m }, hour, minute, true).show() }
+
+    // Диалог удаления
+    var confirmDelete by remember { mutableStateOf(false) }
+
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Новая привычка") },
-                navigationIcon = {
-                    IconButton(onClick = onDone) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Назад")
-                    }
-                },
+            SimpleTopBar(
+                title = if (isEdit) "Редактировать привычку" else "Новая привычка",
+                navText = "Назад",
+                onNavClick = onDone,
                 actions = {
-                    IconButton(enabled = canSave, onClick = {
+                    if (isEdit) {
+                        TextButton(onClick = { confirmDelete = true }) { Text("Удалить") }
+                    }
+                    TextButton(enabled = canSave && loaded, onClick = {
                         scope.launch {
-                            val id = repo.newHabit(name.text.trim(), target, hour, minute, daysMask(days))
-                            val rem = repo.getHabitWithReminders(id)!!.reminders.first()
-                            scheduler.schedule(rem)
-                            snackbarHostState.showSnackbar("Сохранено")
+                            if (!isEdit) {
+                                val id = repo.newHabit(name.text.trim(), target, hour, minute, daysMask(days))
+                                val rem = repo.getHabitWithReminders(id)!!.reminders.first()
+                                scheduler.schedule(rem)
+                            } else {
+                                val id = habitId!!
+                                // обновим хабит
+                                val hw = repo.getHabitWithReminders(id) ?: return@launch
+                                repo.run {
+                                    // обновление полей привычки
+                                    Graph.db.habitsDao().update(hw.habit.copy(name = name.text.trim(), targetPerDay = target))
+                                    // обновление напоминания
+                                    val rid = reminderId ?: hw.reminders.firstOrNull()?.id
+                                    if (rid != null) {
+                                        val upd = Graph.repo.updateReminder(rid, hour, minute, daysMask(days))
+                                        if (upd != null) {
+                                            // можно без cancel: тот же requestCode перезапишет будильник
+                                            Graph.scheduler.schedule(upd)
+                                        }
+                                    }
+                                }
+                                // rechedule всех напоминаний этой привычки
+                                scheduler.scheduleForHabit(id)
+                            }
+                            snackbarHost.showSnackbar("Сохранено")
                             onDone()
                         }
-                    }) {
-                        Icon(Icons.Rounded.Done, contentDescription = "Сохранить")
-                    }
-                },
-                scrollBehavior = scrollBehavior
+                    }) { Text("Сохранить") }
+                }
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHost) }
     ) { p ->
         Column(
             Modifier
@@ -95,111 +125,56 @@ fun HabitEditScreen(onDone: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Название привычки") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                value = name, onValueChange = { name = it },
+                label = { Text("Название привычки") }, singleLine = true, modifier = Modifier.fillMaxWidth()
             )
 
-            // Цель в день
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Цель/день", style = MaterialTheme.typography.labelLarge)
-                Stepper(
-                    value = target,
-                    onChange = { v -> if (v in 1..20) target = v }
-                )
+                // допускаем 0
+                Stepper(value = target, onChange = { target = it }, min = 0)
             }
 
-            // Время
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Время", style = MaterialTheme.typography.labelLarge)
                 OutlinedButton(onClick = showTimePicker) {
                     Text(String.format(Locale.getDefault(), "%02d:%02d", hour, minute))
                 }
             }
 
-            // Дни недели
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Дни недели", style = MaterialTheme.typography.labelLarge)
                 DaysSelector(days = days, onToggle = { d ->
                     days = if (days.contains(d)) days - d else days + d
                 })
                 if (days.isEmpty()) {
-                    AssistiveText("Выбери хотя бы один день")
+                    Text("Выбери хотя бы один день", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-
-            // Подсказки
-            AssistiveText("Сохранение доступно при заполненном названии и выбранных днях.")
         }
     }
-}
 
-/* ---------- Вспомогательные компоненты ---------- */
-
-@Composable
-private fun Stepper(value: Int, onChange: (Int) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        FilledTonalButton(enabled = value > 1, onClick = { onChange(value - 1) }) { Text("–") }
-        Spacer(Modifier.width(12.dp))
-        Text("$value", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.width(12.dp))
-        FilledTonalButton(onClick = { onChange(value + 1) }) { Text("+") }
+    if (confirmDelete && isEdit) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    scope.launch {
+                        val id = habitId!!
+                        // отменим будильники для всех напоминаний этой привычки
+                        val hw = repo.getHabitWithReminders(id)
+                        hw?.reminders?.forEach { r -> Graph.scheduler.cancel(r.id, id) }
+                        // удалим привычку (каскад очистит checkins/reminders)
+                        repo.deleteHabit(id)
+                        snackbarHost.showSnackbar("Удалено")
+                        onDone()
+                    }
+                }) { Text("Удалить") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            title = { Text("Удалить привычку?") },
+            text = { Text("Это действие нельзя отменить.") }
+        )
     }
-}
-
-@Composable
-private fun DaysSelector(days: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
-    val order = listOf(
-        DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
-        DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY
-    )
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        order.forEach { d ->
-            FilterChip(
-                selected = days.contains(d),
-                onClick = { onToggle(d) },
-                label = { Text(short(d)) }
-            )
-        }
-    }
-}
-
-
-@Composable
-private fun AssistiveText(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-/* ---------- Утилиты ---------- */
-
-private fun defaultWeekdays() = setOf(
-    DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
-    DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
-)
-
-private fun short(d: DayOfWeek) = when (d) {
-    DayOfWeek.MONDAY -> "Пн"
-    DayOfWeek.TUESDAY -> "Вт"
-    DayOfWeek.WEDNESDAY -> "Ср"
-    DayOfWeek.THURSDAY -> "Чт"
-    DayOfWeek.FRIDAY -> "Пт"
-    DayOfWeek.SATURDAY -> "Сб"
-    DayOfWeek.SUNDAY -> "Вс"
-}
-
-private fun daysMask(set: Set<DayOfWeek>): Int {
-    var mask = 0
-    set.forEach { d -> mask = mask or (1 shl ((d.value + 6) % 7)) } // Mon->0
-    return mask
 }

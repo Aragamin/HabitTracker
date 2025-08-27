@@ -8,49 +8,110 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.habits.Graph
-import com.example.habits.data.HabitEntity
+import com.example.habits.data.DayMark
+import com.example.habits.ui.components.PartialValueDialog
+import com.example.habits.ui.components.SimpleTopBar
+import com.example.habits.ui.components.StateMark
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 
 @Composable
-fun HabitListScreen(onAdd: () -> Unit) {
+fun HabitListScreen(
+    onAdd: () -> Unit,
+    onSettings: () -> Unit,
+    onSettingsHabit: (Long) -> Unit
+) {
     val repo = Graph.repo
-    val habits by repo.observeHabits().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
-    val zone = remember { ZoneId.systemDefault() }
+    val zone = ZoneId.systemDefault()
+
+    val items by repo.observeHabitsWithToday(zone).collectAsState(initial = emptyList())
+
+    var dialogHabitId by remember { mutableStateOf<Long?>(null) }
+    var dialogTarget by remember { mutableStateOf(0) }
 
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = onAdd) { Text("+") }
-        }
-    ) { p ->
-        LazyColumn(Modifier.padding(p).padding(16.dp)) {
-            items(habits) { h ->
-                HabitItem(h = h,
-                    onCheck = {
-                        scope.launch { repo.addCheckinNow(h.id) }
-                    },
-                    progressLabel = produceState(initialValue = "…", h) {
-                        val today = repo.todayCount(h.id, zone)
-                        value = "$today / ${h.targetPerDay}"
-                    }.value
-                )
+        topBar = { SimpleTopBar(title = "Привычки", actions = { TextButton(onClick = onSettings) { Text("Настройки") } }) },
+        floatingActionButton = { FloatingActionButton(onClick = onAdd) { Text("+") } }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+        ) {
+            items(items, key = { it.habit.id }) { hw ->
+                val mark by repo.observeTodayMark(hw.habit.id, zone).collectAsState(initial = DayMark.UNSET)
+
+                val target = hw.habit.targetPerDay
+                val showNumbers = target >= 2
+                val allowPartial = target >= 2  // PARTIAL разрешён только при цели ≥ 2
+                val progressText =
+                    if (showNumbers) "Сегодня: ${hw.todayCount} / $target"
+                    else "Сегодня: " + when (mark) {
+                        DayMark.DONE -> "✓"
+                        DayMark.MISSED -> "✕"
+                        DayMark.PARTIAL -> "~" // теоретически не появится при allowPartial=false, но оставим для совместимости
+                        DayMark.UNSET -> "—"
+                    }
+
+                Card {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(hw.habit.name, style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(progressText)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // кнопка «настройки»
+                                TextButton(onClick = { onSettingsHabit(hw.habit.id) }) { Text("⚙") }
+                                // переключатель состояния
+                                StateMark(
+                                    value = mark,
+                                    allowPartial = allowPartial
+                                ) { next ->
+                                    when {
+                                        // Диалог PARTIAL только если target >= 2
+                                        next == DayMark.PARTIAL && allowPartial -> {
+                                            dialogHabitId = hw.habit.id
+                                            dialogTarget = target
+                                        }
+                                        // Вместо PARTIAL при цели 0/1 — шаг к серому (UNSET), чтобы не падать
+                                        next == DayMark.PARTIAL && !allowPartial -> {
+                                            scope.launch { repo.setTodayMark(hw.habit.id, zone, DayMark.UNSET) }
+                                        }
+                                        else -> {
+                                            scope.launch { repo.setTodayMark(hw.habit.id, zone, next) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
             }
         }
     }
-}
 
-@Composable
-private fun HabitItem(h: HabitEntity, onCheck: () -> Unit, progressLabel: String) {
-    Card {
-        Column(Modifier.padding(16.dp)) {
-            Text(h.name, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Сегодня: $progressLabel")
-                Button(onClick = onCheck) { Text("Отметить") }
-            }
-        }
+    // Диалог PARTIAL только если target >= 2
+    if (dialogHabitId != null) {
+        val id = dialogHabitId!!
+        val target = dialogTarget
+        PartialValueDialog(
+            target = target,
+            onConfirm = { value ->
+                dialogHabitId = null
+                val v = value.coerceIn(0.0, target.toDouble())
+                // если частичное == цели → DONE
+                if (v >= target.toDouble()) {
+                    scope.launch { Graph.repo.setTodayMark(id, zone, DayMark.DONE) }
+                } else {
+                    scope.launch { Graph.repo.setTodayPartial(id, zone, v) }
+                }
+            },
+            onDismiss = { dialogHabitId = null }
+        )
     }
 }

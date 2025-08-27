@@ -27,7 +27,7 @@ data class ReminderEntity(
     val habitId: Long,
     val hour: Int,
     val minute: Int,
-    val daysMask: Int, // биты Пн..Вс: 1<<0 ... 1<<6
+    val daysMask: Int
 )
 
 @Entity(
@@ -43,7 +43,13 @@ data class ReminderEntity(
 data class CheckinEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val habitId: Long,
-    val ts: Instant = Instant.now()
+    val ts: Instant = Instant.now(),
+    // legacy поле оставляем для миграции, логику считаем по status/value
+    val isDone: Boolean = true,
+    // частичный прогресс
+    val value: Double? = null,
+    // 1=DONE, 2=MISSED, 3=PARTIAL
+    val status: Int = 1
 )
 
 data class HabitWithReminder(
